@@ -9,12 +9,18 @@ import { formatGHS, formatMinorGHS } from '@/lib/format';
 import type { CheckoutCreateResponse, CheckoutPreviewResponse } from '@/lib/types';
 
 const fallbackImage = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80';
+const CHECKOUT_SNAPSHOT_KEY = 'checkout:last_customer';
 
 function normalizeImageUrl(url?: string | null) {
   if (!url?.trim()) return fallbackImage;
   if (url.startsWith('//')) return `https:${url}`;
   if (url.startsWith('http://')) return `https://${url.slice('http://'.length)}`;
   return encodeURI(url);
+}
+
+function isValidPhone(value: string) {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 9 && digits.length <= 15;
 }
 
 type FulfillmentType = 'PICKUP' | 'DELIVERY';
@@ -89,6 +95,11 @@ export function CheckoutClient() {
       return;
     }
 
+    if (!isValidPhone(customer.phone)) {
+      setError('Please enter a valid phone number before payment.');
+      return;
+    }
+
     setIsCheckingOut(true);
     setError('');
 
@@ -116,8 +127,25 @@ export function CheckoutClient() {
       const data = (await response.json()) as CheckoutCreateResponse & { error?: string };
       if (!response.ok) throw new Error(data?.error || 'Checkout failed.');
 
-      const paymentUrl = data.checkout_url || data.payment_url || data.redirect_url;
-      const reference = data.payment_reference || data.order_reference || data.order_id;
+      const paymentUrl = data.authorizationUrl || data.authorization_url || data.checkoutUrl || data.checkout_url || data.paymentUrl || data.payment_url || data.redirect_url;
+      const reference = data.reference || data.payment_reference || data.order_reference || data.clientOrderId || data.client_order_id || data.order_id;
+      const amountPaid = typeof data.amountPaid === 'number'
+        ? data.amountPaid
+        : typeof data.amount_paid === 'number'
+          ? data.amount_paid
+          : preview?.final_total ?? Math.round(estimatedTotal * 100);
+
+      window.sessionStorage.setItem(CHECKOUT_SNAPSHOT_KEY, JSON.stringify({
+        name: customer.name.trim(),
+        email: customer.email.trim(),
+        phone: customer.phone.trim(),
+        deliveryLocation: customer.deliveryLocation.trim(),
+        reference,
+        amountPaid,
+        amount: amountPaid,
+        currency: 'GHS',
+        status: 'success'
+      }));
 
       if (paymentUrl) {
         clearCart();
@@ -173,8 +201,8 @@ export function CheckoutClient() {
                   <div className='flex items-start justify-between gap-3'>
                     <div>
                       <h2 className='font-semibold text-stone-900'>{item.name}</h2>
-                      <p className='text-xs text-stone-500'>{item.category || 'Prep N Prime GH'}</p>
-                      <p className='text-sm font-medium text-stone-800'>{formatGHS(item.price)} each</p>
+                      <p className='text-xs text-stone-500'>{item.storeName || item.category || 'Prep N Prime GH'}</p>
+                      <p className='text-sm font-medium text-stone-800'>{formatGHS(item.price ?? undefined)} each</p>
                     </div>
                     <button type='button' onClick={() => removeItem(item)} className='text-xs font-medium text-rose-600'>Remove</button>
                   </div>
