@@ -42,6 +42,10 @@ export type CheckoutPayload = {
   delivery_location?: string;
   customer?: CartCustomer;
   note?: string;
+  amount?: number;
+  totalAmount?: number;
+  total_amount?: number;
+  pricing_snapshot?: unknown;
   items: CheckoutCartItemInput[];
 };
 
