@@ -41,6 +41,85 @@ function normalizeSedifexItemId(rawId: string, storeId: string) {
   return storeId && id.startsWith(storePrefix) ? id.slice(storePrefix.length) : id;
 }
 
+function buildCheckoutBody(payload: CheckoutPayload) {
+  const storeId = SEDIFEX_STORE_ID as string;
+  const clientOrderId = `PREP-PAY-${Date.now()}`;
+  const cart = payload.items.map((item) => {
+    const productId = normalizeSedifexItemId(item.item_id, storeId);
+    return {
+      productId,
+      item_id: productId,
+      originalProductId: item.item_id,
+      merchantId: storeId,
+      merchant_id: storeId,
+      storeId,
+      store_id: storeId,
+      quantity: item.qty,
+      qty: item.qty,
+      type: item.type,
+      item_type: item.type.toLowerCase()
+    };
+  });
+  const items = cart.map((item) => ({
+    id: item.productId,
+    item_id: item.productId,
+    productId: item.productId,
+    originalProductId: item.originalProductId,
+    merchantId: item.merchantId,
+    merchant_id: item.merchant_id,
+    storeId: item.storeId,
+    store_id: item.store_id,
+    qty: item.qty,
+    quantity: item.quantity,
+    type: item.type,
+    item_type: item.item_type
+  }));
+
+  return {
+    storeId,
+    store_id: storeId,
+    merchantId: storeId,
+    merchant_id: storeId,
+    clientOrderId,
+    client_order_id: clientOrderId,
+    sourceChannel: 'client_website',
+    source_channel: 'client_website',
+    sourceLabel: 'Prep N Prime GH Website',
+    source_label: 'Prep N Prime GH Website',
+    orderType: 'product',
+    currency: payload.currency ?? 'GHS',
+    fulfillment_type: 'PICKUP',
+    delivery_address_id: null,
+    delivery_fee: 0,
+    tax_total: 0,
+    charge_processing_fee_to_customer: true,
+    add_processing_fee_to_customer: true,
+    processing_fee_payer: 'customer',
+    cart,
+    items,
+    customer: payload.customer,
+    delivery: {
+      location: payload.delivery_location ?? payload.customer?.deliveryLocation ?? '',
+      notes: payload.note ?? payload.customer?.note ?? '',
+      feeMode: 'after_payment',
+      message: 'Delivery fee will be confirmed after payment based on customer location.'
+    },
+    delivery_location: payload.delivery_location,
+    note: payload.note,
+    returnUrl: `${SITE_URL}/checkout/success`,
+    cancelUrl: `${SITE_URL}/checkout/failed`,
+    success_url: `${SITE_URL}/checkout/success`,
+    failed_url: `${SITE_URL}/checkout/failed`,
+    syncStatus: 'pending',
+    syncRequestedAt: new Date().toISOString(),
+    attributes: {
+      source: 'website_checkout',
+      deliveryFeeMode: 'after_payment',
+      processingFeePayer: 'customer'
+    }
+  };
+}
+
 function validatePayload(payload: CheckoutPayload) {
   if (!SEDIFEX_STORE_ID || !SEDIFEX_API_KEY) return 'Sedifex checkout is not configured yet.';
   if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) return 'Cart is empty.';
@@ -51,101 +130,36 @@ function validatePayload(payload: CheckoutPayload) {
   return null;
 }
 
+async function postToSedifex(endpoint: string, body: ReturnType<typeof buildCheckoutBody>) {
+  const url = new URL(endpoint, SEDIFEX_BASE_URL);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: sedifexHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => null);
+  return { response, data };
+}
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as CheckoutPayload;
     const validationError = validatePayload(payload);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const storeId = SEDIFEX_STORE_ID as string;
-    const clientOrderId = `PREP-PAY-${Date.now()}`;
-    const cart = payload.items.map((item) => {
-      const productId = normalizeSedifexItemId(item.item_id, storeId);
-      return {
-        productId,
-        item_id: productId,
-        originalProductId: item.item_id,
-        merchantId: storeId,
-        merchant_id: storeId,
-        storeId,
-        store_id: storeId,
-        quantity: item.qty,
-        qty: item.qty,
-        type: item.type,
-        item_type: item.type.toLowerCase()
-      };
-    });
-    const items = cart.map((item) => ({
-      id: item.productId,
-      item_id: item.productId,
-      productId: item.productId,
-      originalProductId: item.originalProductId,
-      merchantId: item.merchantId,
-      merchant_id: item.merchant_id,
-      storeId: item.storeId,
-      store_id: item.store_id,
-      qty: item.qty,
-      quantity: item.quantity,
-      type: item.type,
-      item_type: item.item_type
-    }));
+    const body = buildCheckoutBody(payload);
+    const primary = await postToSedifex('/integrationCheckoutCreate', body);
+    const result = primary.response.status === 404 ? await postToSedifex('/integration/checkout/create', body) : primary;
 
-    const url = new URL('/integration/checkout/create', SEDIFEX_BASE_URL);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: sedifexHeaders(),
-      cache: 'no-store',
-      body: JSON.stringify({
-        storeId,
-        store_id: storeId,
-        merchantId: storeId,
-        merchant_id: storeId,
-        clientOrderId,
-        client_order_id: clientOrderId,
-        sourceChannel: 'client_website',
-        source_channel: 'client_website',
-        sourceLabel: 'Prep N Prime GH Website',
-        source_label: 'Prep N Prime GH Website',
-        orderType: 'product',
-        currency: payload.currency ?? 'GHS',
-        fulfillment_type: 'PICKUP',
-        delivery_address_id: null,
-        delivery_fee: 0,
-        tax_total: 0,
-        charge_processing_fee_to_customer: true,
-        add_processing_fee_to_customer: true,
-        processing_fee_payer: 'customer',
-        cart,
-        items,
-        customer: payload.customer,
-        delivery: {
-          location: payload.delivery_location ?? payload.customer?.deliveryLocation ?? '',
-          notes: payload.note ?? payload.customer?.note ?? '',
-          feeMode: 'after_payment',
-          message: 'Delivery fee will be confirmed after payment based on customer location.'
-        },
-        delivery_location: payload.delivery_location,
-        note: payload.note,
-        returnUrl: `${SITE_URL}/checkout/success`,
-        cancelUrl: `${SITE_URL}/checkout/failed`,
-        success_url: `${SITE_URL}/checkout/success`,
-        failed_url: `${SITE_URL}/checkout/failed`,
-        syncStatus: 'pending',
-        syncRequestedAt: new Date().toISOString(),
-        attributes: {
-          source: 'website_checkout',
-          deliveryFeeMode: 'after_payment',
-          processingFeePayer: 'customer'
-        }
-      })
-    });
-
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      return NextResponse.json({ error: data?.error || `Sedifex checkout create failed: ${response.status}` }, { status: response.status });
+    if (!result.response.ok) {
+      return NextResponse.json(
+        { error: result.data?.error || result.data?.message || `Sedifex checkout create failed: ${result.response.status}` },
+        { status: result.response.status }
+      );
     }
 
-    return NextResponse.json(data as CheckoutCreateResponse);
+    return NextResponse.json(result.data as CheckoutCreateResponse);
   } catch {
     return NextResponse.json({ error: 'Checkout failed.' }, { status: 500 });
   }
