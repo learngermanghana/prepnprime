@@ -5,6 +5,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ActivityPopups } from '@/components/activity-popups';
 import { CartProvider } from '@/components/cart-provider';
+import { StructuredData } from '@/components/structured-data';
 import { defaultMetadata } from '@/lib/metadata';
 import './globals.css';
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang='en'>
       <head>
+        <StructuredData />
         <script
           async
           src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8991390842894141'
