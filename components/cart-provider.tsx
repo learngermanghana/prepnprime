@@ -40,6 +40,10 @@ function normalizeImageUrl(url?: string | null) {
   return encodeURI(url);
 }
 
+function formatCartPrice(value?: number | null) {
+  return formatGHS(value ?? undefined);
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -163,8 +167,8 @@ function CartLineItem({ item }: { item: CartItem }) {
       <div className='space-y-2'>
         <div>
           <p className='text-sm font-semibold text-stone-900'>{item.name}</p>
-          <p className='text-xs text-stone-500'>{item.category || 'Prep N Prime GH'}</p>
-          <p className='text-xs font-medium text-stone-800'>{formatGHS(item.price)} each</p>
+          <p className='text-xs text-stone-500'>{item.storeName || item.category || 'Prep N Prime GH'}</p>
+          <p className='text-xs font-medium text-stone-800'>{formatCartPrice(item.price)} each</p>
         </div>
         <div className='flex items-center justify-between gap-3'>
           <div className='inline-flex items-center overflow-hidden rounded-full border border-stone-300'>
