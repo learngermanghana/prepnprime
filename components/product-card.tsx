@@ -3,8 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { AddToCartButton } from '@/components/cart-provider';
 import { formatGHS } from '@/lib/format';
-import { buildWhatsAppLink } from '@/lib/constants';
 import { SedifexProduct } from '@/lib/types';
 import { getStableProductSlug } from '@/lib/product-slug';
 
@@ -62,16 +62,14 @@ export function ProductCard({ product }: { product: SedifexProduct }) {
           {shortDescription}
           {shouldTruncate && <span className='ml-1 font-medium text-stone-800'>Read more</span>}
         </p>
-        <div className='flex items-center justify-between'>
+        <div className='flex items-center justify-between gap-3'>
           <span className='font-semibold text-stone-900'>{formatGHS(product.price)}</span>
-          <a
-            href={buildWhatsAppLink(`Hello Prep N Prime GH, I want to order ${product.name}.`)}
-            target='_blank'
-            rel='noreferrer'
-            className='rounded-full bg-stone-900 px-4 py-2 text-xs font-medium text-white'
-          >
-            Order on WhatsApp
-          </a>
+          <div className='flex items-center gap-2'>
+            <Link href={`/shop/${slug}`} className='rounded-full border border-stone-300 px-4 py-2 text-xs font-medium text-stone-800'>
+              View details
+            </Link>
+            <AddToCartButton product={product} />
+          </div>
         </div>
       </div>
     </article>
