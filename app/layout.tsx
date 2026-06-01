@@ -4,6 +4,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ActivityPopups } from '@/components/activity-popups';
+import { CartProvider } from '@/components/cart-provider';
 import { defaultMetadata } from '@/lib/metadata';
 import './globals.css';
 
@@ -20,10 +21,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
       </head>
       <body>
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
-        <ActivityPopups />
+        <CartProvider>
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+          <ActivityPopups />
+        </CartProvider>
         <Analytics />
         <SpeedInsights />
       </body>
