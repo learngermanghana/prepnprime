@@ -2,9 +2,19 @@ import { NextResponse } from 'next/server';
 import type { CheckoutPayload } from '@/lib/cart';
 import type { CheckoutCreateResponse } from '@/lib/types';
 
-const SEDIFEX_BASE_URL = process.env.SEDIFEX_API_BASE_URL ?? 'https://us-central1-sedifex-web.cloudfunctions.net';
-const SEDIFEX_STORE_ID = process.env.SEDIFEX_STORE_ID;
-const SEDIFEX_API_KEY = process.env.SEDIFEX_INTEGRATION_API_KEY ?? process.env.SEDIFEX_INTEGRATION_KEY;
+const SEDIFEX_BASE_URL =
+  process.env.SEDIFEX_API_BASE_URL ??
+  process.env.SEDIFEX_INTEGRATION_API_BASE_URL ??
+  'https://us-central1-sedifex-web.cloudfunctions.net';
+const SEDIFEX_STORE_ID =
+  process.env.SEDIFEX_STORE_ID ??
+  process.env.SEDIFEX_BOOKING_TARGET_STORE_ID ??
+  process.env.NEXT_PUBLIC_SEDIFEX_STORE_ID;
+const SEDIFEX_API_KEY =
+  process.env.SEDIFEX_INTEGRATION_API_KEY ??
+  process.env.SEDIFEX_BOOKING_API_KEY ??
+  process.env.SEDIFEX_PRODUCTS_API_KEY ??
+  process.env.SEDIFEX_INTEGRATION_KEY;
 const SEDIFEX_CONTRACT_VERSION = process.env.SEDIFEX_CONTRACT_VERSION ?? '2026-04-13';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.prepnprimegh.com';
 
