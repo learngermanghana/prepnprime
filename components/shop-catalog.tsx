@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ProductCard } from '@/components/product-card';
 import { SedifexProduct } from '@/lib/types';
 
-type ShopCatalogProps = {
+ type ShopCatalogProps = {
   products: SedifexProduct[];
 };
 
@@ -14,17 +14,37 @@ const MAX_RECENT_SEARCHES = 6;
 
 const synonymMap: Record<string, string[]> = {
   adidas: ['adiddas', 'addidas', 'adi das'],
-  moisturizer: ['moisturiser', 'hydrator', 'hydrating cream'],
-  serum: ['essence', 'concentrate'],
-  cleanser: ['face wash', 'wash', 'cleanser'],
-  sunscreen: ['spf', 'sunblock'],
-  exfoliator: ['scrub', 'peel'],
-  body: ['bodycare', 'body care'],
-  skincare: ['skin care', 'skin-care']
+  moisturizer: ['moisturiser', 'moisture', 'hydrator', 'hydrating cream', 'cream', 'lotion'],
+  lotion: ['body lotion', 'cream', 'moisturizer', 'moisturiser'],
+  serum: ['essence', 'concentrate', 'ampoule'],
+  cleanser: ['face wash', 'wash', 'cleanser', 'soap'],
+  toner: ['toning', 'face toner'],
+  sunscreen: ['spf', 'sunblock', 'sun screen'],
+  exfoliator: ['scrub', 'peel', 'body scrub', 'exfoliating'],
+  acne: ['pimple', 'breakout', 'spots'],
+  brightening: ['glow', 'whitening', 'lightening', 'radiance'],
+  'dark spot': ['dark spots', 'hyperpigmentation', 'black spot', 'marks'],
+  body: ['bodycare', 'body care', 'body products'],
+  skincare: ['skin care', 'skin-care', 'face care', 'facial'],
+  oil: ['body oil', 'glow oil'],
+  makeup: ['make up', 'cosmetics'],
+  sensitive: ['sensitive skin', 'gentle', 'mild'],
+  hair: ['hair care', 'wig', 'braid'],
+  fragrance: ['perfume', 'body mist', 'spray']
 };
 
 function normalizeTerm(value: string) {
-  return value.toLowerCase().trim().replace(/\s+/g, ' ');
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function tokenize(value: string) {
+  return normalizeTerm(value).split(' ').filter(Boolean);
 }
 
 function levenshtein(a: string, b: string) {
@@ -55,6 +75,13 @@ function levenshtein(a: string, b: string) {
   return prev[b.length];
 }
 
+function getFuzzyDistance(term: string) {
+  if (term.length <= 3) return 0;
+  if (term.length <= 5) return 1;
+  if (term.length <= 9) return 2;
+  return 3;
+}
+
 function buildAliasMap() {
   const aliases = new Map<string, Set<string>>();
 
@@ -81,26 +108,58 @@ function buildAliasMap() {
 
 const aliasMap = buildAliasMap();
 
+function collectSearchValues(value: unknown, values: string[] = []): string[] {
+  if (value === null || value === undefined) return values;
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    values.push(String(value));
+    return values;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSearchValues(item, values));
+    return values;
+  }
+
+  if (typeof value === 'object') {
+    Object.values(value as Record<string, unknown>).forEach((item) => collectSearchValues(item, values));
+  }
+
+  return values;
+}
+
+function getProductSearchValues(product: SedifexProduct) {
+  const values = collectSearchValues(product);
+  if (typeof product.price === 'number') {
+    values.push(`GHS ${product.price}`);
+    values.push(`${product.price} cedis`);
+  }
+
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
 function expandSearchTerms(query: string) {
   const normalized = normalizeTerm(query);
   const terms = new Set<string>(normalized ? [normalized] : []);
 
-  normalized.split(' ').forEach((token) => {
-    const normalizedToken = normalizeTerm(token);
-    if (!normalizedToken) return;
+  const directAliases = aliasMap.get(normalized);
+  directAliases?.forEach((term) => terms.add(term));
 
-    terms.add(normalizedToken);
-    aliasMap.get(normalizedToken)?.forEach((term) => terms.add(term));
+  tokenize(normalized).forEach((token) => {
+    if (!token) return;
+
+    terms.add(token);
+    aliasMap.get(token)?.forEach((term) => terms.add(term));
 
     Object.entries(synonymMap).forEach(([canonical, aliases]) => {
       const normalizedCanonical = normalizeTerm(canonical);
-      if (levenshtein(normalizedToken, normalizedCanonical) <= 2) {
+      if (levenshtein(token, normalizedCanonical) <= getFuzzyDistance(token)) {
         terms.add(normalizedCanonical);
       }
 
       aliases.forEach((alias) => {
         const normalizedAlias = normalizeTerm(alias);
-        if (levenshtein(normalizedToken, normalizedAlias) <= 2) {
+        if (levenshtein(token, normalizedAlias) <= getFuzzyDistance(token)) {
           terms.add(normalizedCanonical);
           terms.add(normalizedAlias);
         }
@@ -108,28 +167,68 @@ function expandSearchTerms(query: string) {
     });
   });
 
-  return Array.from(terms);
+  return Array.from(terms).filter(Boolean);
+}
+
+function tokenMatches(term: string, combinedContent: string, contentTokens: string[]) {
+  if (!term) return true;
+  if (combinedContent.includes(term)) return true;
+
+  return contentTokens.some((token) => {
+    if (token === term) return true;
+    if (term.length >= 3 && token.includes(term)) return true;
+    if (token.length >= 3 && term.includes(token)) return true;
+    return levenshtein(token, term) <= getFuzzyDistance(term);
+  });
 }
 
 function matchesSearch(product: SedifexProduct, query: string) {
-  if (!query) return true;
+  const normalizedQuery = normalizeTerm(query);
+  if (!normalizedQuery) return true;
 
-  const searchableContent = [product.name, product.category, product.description, product.itemType]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => normalizeTerm(value));
+  const searchableValues = getProductSearchValues(product).map(normalizeTerm).filter(Boolean);
+  const combinedContent = searchableValues.join(' ');
+  const contentTokens = tokenize(combinedContent);
+  const queryTokens = tokenize(normalizedQuery);
 
-  const expandedTerms = expandSearchTerms(query);
+  if (combinedContent.includes(normalizedQuery)) return true;
 
-  return expandedTerms.some((term) => {
-    return searchableContent.some((field) => {
-      if (field.includes(term)) return true;
+  return queryTokens.every((token) => {
+    const expandedTokenTerms = expandSearchTerms(token);
+    return expandedTokenTerms.some((term) => tokenMatches(term, combinedContent, contentTokens));
+  });
+}
 
-      return field
-        .split(/[^a-z0-9]+/)
-        .filter(Boolean)
-        .some((token) => levenshtein(token, term) <= 2);
+function getSearchScore(product: SedifexProduct, query: string) {
+  const normalizedQuery = normalizeTerm(query);
+  if (!normalizedQuery) return 0;
+
+  const name = normalizeTerm(product.name);
+  const category = normalizeTerm(product.category ?? '');
+  const description = normalizeTerm(product.description ?? '');
+  const combinedContent = getProductSearchValues(product).map(normalizeTerm).join(' ');
+  const queryTokens = tokenize(normalizedQuery);
+  const contentTokens = tokenize(combinedContent);
+
+  let score = 0;
+  if (name === normalizedQuery) score += 200;
+  if (name.includes(normalizedQuery)) score += 120;
+  if (category.includes(normalizedQuery)) score += 80;
+  if (description.includes(normalizedQuery)) score += 40;
+  if (combinedContent.includes(normalizedQuery)) score += 30;
+
+  queryTokens.forEach((token) => {
+    const expandedTerms = expandSearchTerms(token);
+    expandedTerms.forEach((term) => {
+      if (name.includes(term)) score += 30;
+      if (category.includes(term)) score += 20;
+      if (description.includes(term)) score += 10;
+      if (contentTokens.includes(term)) score += 8;
+      if (tokenMatches(term, combinedContent, contentTokens)) score += 3;
     });
   });
+
+  return score;
 }
 
 export function ShopCatalog({ products }: ShopCatalogProps) {
@@ -138,6 +237,9 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
   const [stockOnly, setStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'featured' | 'price-low' | 'price-high' | 'name-asc'>('featured');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  const normalizedQuery = normalizeTerm(query);
+  const isSearching = Boolean(normalizedQuery);
 
   const categories = useMemo(() => {
     const uniqueCategories = new Set(
@@ -164,9 +266,14 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
     const baseTerms = new Set<string>();
 
     products.forEach((product) => {
-      [product.name, product.category, product.itemType]
-        .filter((value): value is string => Boolean(value))
-        .forEach((value) => baseTerms.add(value.trim()));
+      getProductSearchValues(product).forEach((value) => {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        if (trimmed.length <= 48) baseTerms.add(trimmed);
+        tokenize(trimmed).forEach((token) => {
+          if (token.length >= 3) baseTerms.add(token);
+        });
+      });
     });
 
     Object.entries(synonymMap).forEach(([canonical, aliases]) => {
@@ -176,7 +283,6 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
 
     recentSearches.forEach((term) => baseTerms.add(term));
 
-    const normalizedQuery = normalizeTerm(query);
     if (!normalizedQuery) {
       return recentSearches.slice(0, MAX_RECENT_SEARCHES);
     }
@@ -187,30 +293,31 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
         return (
           normalizedTerm.includes(normalizedQuery) ||
           normalizedQuery.includes(normalizedTerm) ||
-          levenshtein(normalizedTerm, normalizedQuery) <= 2
+          levenshtein(normalizedTerm, normalizedQuery) <= getFuzzyDistance(normalizedQuery)
         );
       })
       .sort((a, b) => a.localeCompare(b))
       .slice(0, 8);
-  }, [products, query, recentSearches]);
+  }, [normalizedQuery, products, recentSearches]);
 
   const filteredProducts = useMemo(() => {
     const matchedProducts = products.filter((product) => {
       const category = product.category?.trim() || 'Uncategorized';
-      const categoryMatch = activeCategory === allCategoriesLabel || category === activeCategory;
+      const categoryMatch = isSearching || activeCategory === allCategoriesLabel || category === activeCategory;
       const queryMatch = matchesSearch(product, query.trim());
       const stockMatch = !stockOnly || (product.stockCount ?? 0) > 0;
 
       return categoryMatch && queryMatch && stockMatch;
     });
 
-    return matchedProducts.sort((a, b) => {
+    return [...matchedProducts].sort((a, b) => {
+      if (isSearching && sortBy === 'featured') return getSearchScore(b, query) - getSearchScore(a, query);
       if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
       if (sortBy === 'price-low') return (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
       if (sortBy === 'price-high') return (b.price ?? Number.NEGATIVE_INFINITY) - (a.price ?? Number.NEGATIVE_INFINITY);
       return 0;
     });
-  }, [activeCategory, products, query, sortBy, stockOnly]);
+  }, [activeCategory, isSearching, products, query, sortBy, stockOnly]);
 
   const persistRecentSearch = (searchValue: string) => {
     const normalizedValue = normalizeTerm(searchValue);
@@ -232,23 +339,37 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
         <div className='grid gap-4 md:grid-cols-[2fr_1fr]'>
           <div className='space-y-2'>
             <label htmlFor='shop-search' className='block text-sm font-medium text-stone-700'>
-              Search products
+              Smart search products
             </label>
-            <input
-              id='shop-search'
-              type='search'
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onBlur={() => persistRecentSearch(query)}
-              placeholder='Search by name, category, or description'
-              className='w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none ring-rose-200 transition focus:border-rose-400 focus:ring-2'
-              list='shop-search-suggestions'
-            />
+            <div className='relative'>
+              <input
+                id='shop-search'
+                type='search'
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onBlur={() => persistRecentSearch(query)}
+                placeholder='Search product, brand, category, skin concern, price...'
+                className='w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 pr-20 text-sm text-stone-900 outline-none ring-rose-200 transition focus:border-rose-400 focus:ring-2'
+                list='shop-search-suggestions'
+              />
+              {query ? (
+                <button
+                  type='button'
+                  onClick={() => setQuery('')}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 rounded-full px-3 py-1 text-xs font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-900'
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
             <datalist id='shop-search-suggestions'>
               {searchSuggestions.map((suggestion) => (
                 <option key={suggestion} value={suggestion} />
               ))}
             </datalist>
+            <p className='text-xs text-stone-500'>
+              Search checks all products and can understand related words like SPF, sunblock, lotion, cream, glow, acne, and dark spot.
+            </p>
           </div>
           <div className='space-y-2'>
             <label htmlFor='shop-sort' className='block text-sm font-medium text-stone-700'>
@@ -260,7 +381,7 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
               onChange={(event) => setSortBy(event.target.value as 'featured' | 'price-low' | 'price-high' | 'name-asc')}
               className='w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none ring-rose-200 transition focus:border-rose-400 focus:ring-2'
             >
-              <option value='featured'>Featured</option>
+              <option value='featured'>Featured / Best match</option>
               <option value='price-low'>Price: Low to High</option>
               <option value='price-high'>Price: High to Low</option>
               <option value='name-asc'>Name: A to Z</option>
@@ -296,6 +417,9 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
             );
           })}
         </div>
+        {isSearching && activeCategory !== allCategoriesLabel ? (
+          <p className='text-xs text-stone-500'>Smart search is checking all categories. Clear search to use the selected category filter again.</p>
+        ) : null}
       </div>
 
       <p className='text-sm text-stone-600'>
@@ -311,7 +435,7 @@ export function ShopCatalog({ products }: ShopCatalogProps) {
         </div>
       ) : (
         <div className='rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-600'>
-          No products match your filters right now. Try another category or search term.
+          No products match your search right now. Try another product name, brand, category, skin concern, or price.
         </div>
       )}
     </div>
