@@ -9,9 +9,19 @@ import type {
   SedifexPromo
 } from '@/lib/types';
 
-const baseUrl = process.env.SEDIFEX_API_BASE_URL;
-const storeId = process.env.SEDIFEX_STORE_ID;
-const integrationKey = process.env.SEDIFEX_INTEGRATION_API_KEY ?? process.env.SEDIFEX_INTEGRATION_KEY;
+const baseUrl =
+  process.env.SEDIFEX_API_BASE_URL ??
+  process.env.SEDIFEX_INTEGRATION_API_BASE_URL ??
+  'https://us-central1-sedifex-web.cloudfunctions.net';
+const storeId =
+  process.env.SEDIFEX_STORE_ID ??
+  process.env.SEDIFEX_BOOKING_TARGET_STORE_ID ??
+  process.env.NEXT_PUBLIC_SEDIFEX_STORE_ID;
+const integrationKey =
+  process.env.SEDIFEX_PRODUCTS_API_KEY ??
+  process.env.SEDIFEX_INTEGRATION_API_KEY ??
+  process.env.SEDIFEX_BOOKING_API_KEY ??
+  process.env.SEDIFEX_INTEGRATION_KEY;
 const contractVersion = process.env.SEDIFEX_CONTRACT_VERSION ?? '2026-04-13';
 
 function buildHeaders() {
@@ -19,6 +29,7 @@ function buildHeaders() {
 
   return {
     'x-api-key': integrationKey,
+    Authorization: `Bearer ${integrationKey}`,
     'X-Sedifex-Contract-Version': contractVersion,
     Accept: 'application/json'
   };
