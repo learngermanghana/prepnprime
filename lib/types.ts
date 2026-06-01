@@ -7,6 +7,7 @@ export type SedifexProduct = {
   price?: number;
   stockCount?: number;
   itemType?: string;
+  type?: string;
   imageUrl?: string | null;
   imageUrls?: string[];
   imageAlt?: string;
@@ -55,4 +56,32 @@ export type IntegrationPromoResponse = {
 export type IntegrationGalleryResponse = {
   gallery?: SedifexGalleryItem[];
   storeId?: string;
+};
+
+export type CheckoutBreakdownLine = {
+  code: string;
+  amount: number;
+};
+
+export type CheckoutPreviewResponse = {
+  pricing_version?: string;
+  subtotal: number;
+  tax_total: number;
+  delivery_fee: number;
+  pre_processing_total: number;
+  processing_fee_to_add: number;
+  final_total: number;
+  breakdown?: CheckoutBreakdownLine[];
+  pricing_snapshot?: unknown;
+};
+
+export type CheckoutCreateResponse = CheckoutPreviewResponse & {
+  order_id?: string;
+  order_reference?: string;
+  payment_reference?: string;
+  payment_status?: string;
+  order_status?: string;
+  checkout_url?: string;
+  payment_url?: string;
+  redirect_url?: string;
 };
