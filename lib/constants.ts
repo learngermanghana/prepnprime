@@ -12,6 +12,7 @@ export const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/shop', label: 'Shop' },
   { href: '/brand', label: 'Brand' },
+  { href: '/blog', label: 'Blog' },
   { href: '/consultation', label: 'Consultation' },
   { href: '/faq', label: 'FAQ' },
   { href: '/about', label: 'About' },
