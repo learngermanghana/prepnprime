@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { MessageCircleMore } from 'lucide-react';
 import { BRAND_NAME, NAV_LINKS, WHATSAPP_LINK } from '@/lib/constants';
+import { CartButton } from '@/components/cart-provider';
 import { MobileNav } from '@/components/mobile-nav';
 
 export function SiteHeader() {
@@ -17,7 +18,8 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className='hidden md:block'>
+        <div className='hidden items-center gap-3 md:flex'>
+          <CartButton />
           <a
             href={WHATSAPP_LINK}
             target='_blank'
@@ -27,7 +29,10 @@ export function SiteHeader() {
             <MessageCircleMore className='h-4 w-4' /> WhatsApp
           </a>
         </div>
-        <MobileNav />
+        <div className='flex items-center gap-2 md:hidden'>
+          <CartButton compact />
+          <MobileNav />
+        </div>
       </div>
     </header>
   );
