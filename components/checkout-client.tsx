@@ -10,6 +10,7 @@ import type { CheckoutCreateResponse, CheckoutPreviewResponse } from '@/lib/type
 
 const fallbackImage = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80';
 const CHECKOUT_SNAPSHOT_KEY = 'checkout:last_customer';
+const FEE_RATE = 0.0195;
 
 function normalizeImageUrl(url?: string | null) {
   if (!url?.trim()) return fallbackImage;
@@ -23,7 +24,10 @@ function isValidPhone(value: string) {
   return digits.length >= 9 && digits.length <= 15;
 }
 
-type FulfillmentType = 'PICKUP' | 'DELIVERY';
+function estimateServiceChargeMinor(subtotalMinor: number) {
+  if (subtotalMinor <= 0) return 0;
+  return Math.max(0, Math.ceil(subtotalMinor / (1 - FEE_RATE)) - subtotalMinor);
+}
 
 type CustomerForm = {
   name: string;
@@ -35,14 +39,18 @@ type CustomerForm = {
 
 export function CheckoutClient() {
   const { items, count, estimatedTotal, updateQuantity, removeItem, clearCart } = useCart();
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('PICKUP');
   const [customer, setCustomer] = useState<CustomerForm>({ name: '', email: '', phone: '', deliveryLocation: '', note: '' });
   const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState('');
+  const [previewNotice, setPreviewNotice] = useState('');
 
   const checkoutItems = useMemo(() => toCheckoutItems(items), [items]);
+  const localSubtotalMinor = Math.round(estimatedTotal * 100);
+  const productSubtotalMinor = preview?.subtotal ?? localSubtotalMinor;
+  const serviceChargeMinor = preview?.processing_fee_to_add ?? estimateServiceChargeMinor(productSubtotalMinor);
+  const totalToPayMinor = productSubtotalMinor + serviceChargeMinor;
 
   useEffect(() => {
     if (!items.length) {
@@ -54,7 +62,7 @@ export function CheckoutClient() {
 
     async function loadPreview() {
       setIsPreviewing(true);
-      setError('');
+      setPreviewNotice('');
       try {
         const response = await fetch('/api/checkout/preview', {
           method: 'POST',
@@ -62,7 +70,7 @@ export function CheckoutClient() {
           signal: controller.signal,
           body: JSON.stringify({
             currency: 'GHS',
-            fulfillment_type: fulfillmentType,
+            fulfillment_type: 'PICKUP',
             delivery_address_id: null,
             items: checkoutItems
           })
@@ -71,10 +79,10 @@ export function CheckoutClient() {
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Unable to confirm checkout total.');
         setPreview(data);
-      } catch (previewError) {
+      } catch {
         if (controller.signal.aborted) return;
         setPreview(null);
-        setError(previewError instanceof Error ? previewError.message : 'Unable to confirm checkout total.');
+        setPreviewNotice('Service charge is estimated here. Sedifex will confirm the final payment total at checkout.');
       } finally {
         if (!controller.signal.aborted) setIsPreviewing(false);
       }
@@ -82,7 +90,7 @@ export function CheckoutClient() {
 
     loadPreview();
     return () => controller.abort();
-  }, [checkoutItems, fulfillmentType, items.length]);
+  }, [checkoutItems, items.length]);
 
   const updateCustomer = (field: keyof CustomerForm, value: string) => {
     setCustomer((current) => ({ ...current, [field]: value }));
@@ -109,7 +117,7 @@ export function CheckoutClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currency: 'GHS',
-          fulfillment_type: fulfillmentType,
+          fulfillment_type: 'PICKUP',
           delivery_address_id: null,
           delivery_location: customer.deliveryLocation,
           note: customer.note,
@@ -133,7 +141,7 @@ export function CheckoutClient() {
         ? data.amountPaid
         : typeof data.amount_paid === 'number'
           ? data.amount_paid
-          : preview?.final_total ?? Math.round(estimatedTotal * 100);
+          : totalToPayMinor;
 
       window.sessionStorage.setItem(CHECKOUT_SNAPSHOT_KEY, JSON.stringify({
         name: customer.name.trim(),
@@ -172,9 +180,7 @@ export function CheckoutClient() {
         <div className='rounded-3xl border border-dashed border-stone-300 bg-white p-8 shadow-sm'>
           <h1 className='text-2xl font-semibold text-stone-900'>Your cart is empty</h1>
           <p className='mt-3 text-sm text-stone-600'>Add products to your cart before checkout.</p>
-          <Link href='/shop' className='mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white'>
-            Continue shopping
-          </Link>
+          <Link href='/shop' className='mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white'>Continue shopping</Link>
         </div>
       </section>
     );
@@ -186,7 +192,7 @@ export function CheckoutClient() {
         <div>
           <p className='text-sm uppercase tracking-[0.2em] text-rose-500'>Checkout</p>
           <h1 className='mt-2 text-3xl font-semibold text-stone-900'>Review your cart</h1>
-          <p className='mt-2 text-sm text-stone-600'>Sedifex confirms the final total securely before payment.</p>
+          <p className='mt-2 text-sm text-stone-600'>Your total includes products and the Paystack service charge only.</p>
         </div>
 
         <div className='space-y-3'>
@@ -228,31 +234,22 @@ export function CheckoutClient() {
           <input value={customer.name} onChange={(event) => updateCustomer('name', event.target.value)} placeholder='Full name *' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <input value={customer.phone} onChange={(event) => updateCustomer('phone', event.target.value)} placeholder='Phone number *' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <input value={customer.email} onChange={(event) => updateCustomer('email', event.target.value)} placeholder='Email address' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
-          <select value={fulfillmentType} onChange={(event) => setFulfillmentType(event.target.value as FulfillmentType)} className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400'>
-            <option value='PICKUP'>Pickup</option>
-            <option value='DELIVERY'>Delivery</option>
-          </select>
           <input value={customer.deliveryLocation} onChange={(event) => updateCustomer('deliveryLocation', event.target.value)} placeholder='Delivery location / landmark' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <textarea value={customer.note} onChange={(event) => updateCustomer('note', event.target.value)} placeholder='Order note' rows={3} className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
         </div>
 
+        <div className='rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>Delivery fee is not charged now. After payment, the store will contact you and confirm delivery based on your location.</div>
+
         <div className='space-y-3 rounded-2xl bg-stone-50 p-4 text-sm'>
-          <div className='flex justify-between'><span>Browser estimate</span><span className='font-semibold'>{formatGHS(estimatedTotal)}</span></div>
-          <div className='flex justify-between'><span>Subtotal</span><span>{isPreviewing ? 'Confirming...' : formatMinorGHS(preview?.subtotal)}</span></div>
-          <div className='flex justify-between'><span>Tax</span><span>{formatMinorGHS(preview?.tax_total)}</span></div>
-          <div className='flex justify-between'><span>Delivery</span><span>{formatMinorGHS(preview?.delivery_fee)}</span></div>
-          <div className='flex justify-between'><span>Processing fee</span><span>{formatMinorGHS(preview?.processing_fee_to_add)}</span></div>
-          <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Final total</span><span>{formatMinorGHS(preview?.final_total)}</span></div>
+          <div className='flex justify-between'><span>Products subtotal</span><span className='font-semibold'>{formatMinorGHS(productSubtotalMinor)}</span></div>
+          <div className='flex justify-between'><span>Paystack service charge</span><span>{isPreviewing ? 'Confirming...' : formatMinorGHS(serviceChargeMinor)}</span></div>
+          <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Total to pay</span><span>{formatMinorGHS(totalToPayMinor)}</span></div>
         </div>
 
+        {previewNotice ? <p className='rounded-xl bg-stone-50 p-3 text-xs text-stone-600'>{previewNotice}</p> : null}
         {error ? <p className='rounded-xl bg-rose-50 p-3 text-sm text-rose-700'>{error}</p> : null}
 
-        <button
-          type='button'
-          onClick={handleCheckout}
-          disabled={isCheckingOut || isPreviewing || !preview}
-          className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'
-        >
+        <button type='button' onClick={handleCheckout} disabled={isCheckingOut || isPreviewing} className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'>
           {isCheckingOut ? 'Starting payment...' : 'Checkout with Paystack'}
         </button>
       </aside>
