@@ -2,9 +2,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { ProductPurchasePanel } from '@/components/product-purchase-panel';
 import { formatGHS } from '@/lib/format';
 import { findProductBySlug, getStableProductSlug } from '@/lib/product-slug';
-import { getOrderLink, getSedifexProducts } from '@/lib/sedifex';
+import { getSedifexProducts } from '@/lib/sedifex';
 
 const fallbackImage =
   'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80';
@@ -57,7 +58,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const image = resolveImage(product.imageUrl || product.imageUrls?.[0]);
 
   return (
-    <section className='mx-auto max-w-5xl space-y-8 px-4 py-14 md:px-6'>
+    <section className='mx-auto max-w-6xl space-y-8 px-4 py-14 md:px-6'>
       <nav className='text-sm text-stone-500'>
         <Link href='/shop' className='hover:text-stone-900'>
           Shop
@@ -65,26 +66,20 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         / <span className='text-stone-800'>{product.name}</span>
       </nav>
 
-      <article className='grid gap-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:grid-cols-2'>
-        <div className='relative h-80 overflow-hidden rounded-xl bg-stone-100'>
-          <Image src={image} alt={product.imageAlt || product.name} fill className='object-cover' sizes='(max-width: 768px) 100vw, 50vw' />
+      <article className='grid gap-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:grid-cols-[1.1fr_0.9fr]'>
+        <div className='space-y-5'>
+          <div className='relative h-96 overflow-hidden rounded-xl bg-stone-100'>
+            <Image src={image} alt={product.imageAlt || product.name} fill className='object-cover' sizes='(max-width: 768px) 100vw, 60vw' />
+          </div>
+          <div className='space-y-3'>
+            <p className='text-xs uppercase tracking-[0.2em] text-rose-500'>{product.category || 'Beauty Care'}</p>
+            <h1 className='text-3xl font-semibold text-stone-900'>{product.name}</h1>
+            <p className='text-base leading-relaxed text-stone-700'>
+              {product.description?.trim() || 'Premium skincare and body care essential from Prep N Prime GH.'}
+            </p>
+          </div>
         </div>
-        <div className='space-y-4'>
-          <p className='text-xs uppercase tracking-[0.2em] text-rose-500'>{product.category || 'Beauty Care'}</p>
-          <h1 className='text-3xl font-semibold text-stone-900'>{product.name}</h1>
-          <p className='text-2xl font-semibold text-stone-900'>{formatGHS(product.price)}</p>
-          <p className='text-base leading-relaxed text-stone-700'>
-            {product.description?.trim() || 'Premium skincare and body care essential from Prep N Prime GH.'}
-          </p>
-          <a
-            href={getOrderLink(product.name)}
-            target='_blank'
-            rel='noreferrer'
-            className='inline-flex rounded-full bg-stone-900 px-6 py-3 text-sm font-medium text-white'
-          >
-            Order on WhatsApp
-          </a>
-        </div>
+        <ProductPurchasePanel product={product} />
       </article>
     </section>
   );
