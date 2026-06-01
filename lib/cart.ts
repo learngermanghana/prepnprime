@@ -5,13 +5,18 @@ export type CartItemType = 'PRODUCT' | 'SERVICE';
 
 export type CartItem = {
   id: string;
+  productId: string;
+  merchantId: string;
   type: CartItemType;
   name: string;
-  price?: number;
+  productName: string;
+  price?: number | null;
+  currency?: string;
   imageUrl?: string | null;
   category?: string | null;
   quantity: number;
   slug?: string;
+  storeName?: string;
 };
 
 export type CartCustomer = {
@@ -25,6 +30,8 @@ export type CartCustomer = {
 export type CheckoutCartItemInput = {
   type: CartItemType;
   item_id: string;
+  productId?: string;
+  merchantId?: string;
   qty: number;
 };
 
@@ -46,29 +53,38 @@ export function getCartItemType(product: SedifexProduct): CartItemType {
 
 export function cartItemFromProduct(product: SedifexProduct, quantity = 1): CartItem {
   const slug = getStableProductSlug(product);
+  const productId = product.id || slug;
+  const merchantId = product.storeId || 'default-store';
 
   return {
-    id: product.id || slug,
+    id: productId,
+    productId,
+    merchantId,
     type: getCartItemType(product),
     name: product.name,
+    productName: product.name,
     price: product.price,
+    currency: 'GHS',
     imageUrl: product.imageUrl || product.imageUrls?.[0] || null,
     category: product.category,
     quantity,
-    slug
+    slug,
+    storeName: product.storeName || 'Prep N Prime GH'
   };
 }
 
 export function toCheckoutItems(items: CartItem[]): CheckoutCartItemInput[] {
   return items.map((item) => ({
     type: item.type,
-    item_id: item.id,
+    item_id: item.productId || item.id,
+    productId: item.productId || item.id,
+    merchantId: item.merchantId,
     qty: item.quantity
   }));
 }
 
-export function getCartItemKey(item: Pick<CartItem, 'type' | 'id'>) {
-  return `${item.type}:${item.id}`;
+export function getCartItemKey(item: Pick<CartItem, 'type' | 'id'> & Partial<Pick<CartItem, 'merchantId' | 'productId'>>) {
+  return `${item.merchantId ?? 'default-store'}:${item.productId ?? item.id}:${item.type}`;
 }
 
 export function getCartCount(items: CartItem[]) {
