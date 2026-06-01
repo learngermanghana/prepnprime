@@ -29,18 +29,17 @@ function sedifexHeaders() {
   };
 }
 
+function normalizeSedifexItemId(rawId: string, storeId: string) {
+  const id = rawId.trim();
+  const storePrefix = `${storeId}_`;
+  return storeId && id.startsWith(storePrefix) ? id.slice(storePrefix.length) : id;
+}
+
 function validatePayload(payload: CheckoutPayload) {
-  if (!SEDIFEX_STORE_ID || !SEDIFEX_API_KEY) {
-    return 'Sedifex checkout is not configured yet.';
-  }
-
-  if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
-    return 'Cart is empty.';
-  }
-
+  if (!SEDIFEX_STORE_ID || !SEDIFEX_API_KEY) return 'Sedifex checkout is not configured yet.';
+  if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) return 'Cart is empty.';
   const invalidItem = payload.items.find((item) => !item.item_id || !Number.isInteger(item.qty) || item.qty < 1);
   if (invalidItem) return 'Cart contains an invalid item.';
-
   return null;
 }
 
@@ -48,33 +47,48 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as CheckoutPayload;
     const validationError = validatePayload(payload);
-    if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
-    }
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
+    const storeId = SEDIFEX_STORE_ID as string;
+    const items = payload.items.map((item) => {
+      const productId = normalizeSedifexItemId(item.item_id, storeId);
+      return {
+        id: productId,
+        item_id: productId,
+        productId,
+        originalProductId: item.item_id,
+        merchantId: storeId,
+        merchant_id: storeId,
+        storeId,
+        store_id: storeId,
+        type: item.type,
+        item_type: item.type.toLowerCase(),
+        qty: item.qty,
+        quantity: item.qty
+      };
+    });
 
     const url = new URL('/integration/checkout/preview', SEDIFEX_BASE_URL);
-
     const response = await fetch(url, {
       method: 'POST',
       headers: sedifexHeaders(),
       cache: 'no-store',
       body: JSON.stringify({
-        merchant_id: SEDIFEX_STORE_ID,
-        storeId: SEDIFEX_STORE_ID,
+        merchant_id: storeId,
+        merchantId: storeId,
+        storeId,
+        store_id: storeId,
         currency: payload.currency ?? 'GHS',
         fulfillment_type: payload.fulfillment_type ?? 'PICKUP',
         delivery_address_id: payload.delivery_address_id ?? null,
-        items: payload.items
+        cart: items,
+        items
       })
     });
 
     const data = await response.json().catch(() => null);
-
     if (!response.ok) {
-      return NextResponse.json(
-        { error: data?.error || `Sedifex checkout preview failed: ${response.status}` },
-        { status: response.status }
-      );
+      return NextResponse.json({ error: data?.error || `Sedifex checkout preview failed: ${response.status}` }, { status: response.status });
     }
 
     return NextResponse.json(data as CheckoutPreviewResponse);
