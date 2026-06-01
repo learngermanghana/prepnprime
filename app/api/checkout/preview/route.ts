@@ -79,8 +79,13 @@ export async function POST(request: Request) {
         storeId,
         store_id: storeId,
         currency: payload.currency ?? 'GHS',
-        fulfillment_type: payload.fulfillment_type ?? 'PICKUP',
-        delivery_address_id: payload.delivery_address_id ?? null,
+        fulfillment_type: 'PICKUP',
+        delivery_address_id: null,
+        delivery_fee: 0,
+        tax_total: 0,
+        charge_processing_fee_to_customer: true,
+        add_processing_fee_to_customer: true,
+        processing_fee_payer: 'customer',
         cart: items,
         items
       })
