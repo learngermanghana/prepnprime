@@ -11,9 +11,7 @@ export const buildWhatsAppLink = (message: string) =>
 export const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/shop', label: 'Shop' },
-  { href: '/body-care', label: 'Body Care' },
-  { href: '/skin-care', label: 'Skin Care' },
-  { href: '/collections', label: 'Collections' },
+  { href: '/brand', label: 'Brand' },
   { href: '/consultation', label: 'Consultation' },
   { href: '/faq', label: 'FAQ' },
   { href: '/about', label: 'About' },
