@@ -51,6 +51,20 @@ export function CheckoutClient() {
   const productSubtotalMinor = preview?.subtotal ?? localSubtotalMinor;
   const serviceChargeMinor = preview?.processing_fee_to_add ?? estimateServiceChargeMinor(productSubtotalMinor);
   const totalToPayMinor = productSubtotalMinor + serviceChargeMinor;
+  const checkoutAmountMajor = totalToPayMinor / 100;
+  const pricingSnapshot = preview ?? {
+    pricing_version: 'client-estimate-v1',
+    subtotal: productSubtotalMinor,
+    tax_total: 0,
+    delivery_fee: 0,
+    pre_processing_total: productSubtotalMinor,
+    processing_fee_to_add: serviceChargeMinor,
+    final_total: totalToPayMinor,
+    breakdown: [
+      { code: 'SUBTOTAL', amount: productSubtotalMinor },
+      { code: 'PROCESSING_FEE', amount: serviceChargeMinor }
+    ]
+  };
 
   useEffect(() => {
     if (!items.length) {
@@ -103,6 +117,11 @@ export function CheckoutClient() {
       return;
     }
 
+    if (!customer.email.trim()) {
+      setError('Please enter your email address before payment.');
+      return;
+    }
+
     if (!isValidPhone(customer.phone)) {
       setError('Please enter a valid phone number before payment.');
       return;
@@ -121,6 +140,10 @@ export function CheckoutClient() {
           delivery_address_id: null,
           delivery_location: customer.deliveryLocation,
           note: customer.note,
+          amount: checkoutAmountMajor,
+          totalAmount: checkoutAmountMajor,
+          total_amount: checkoutAmountMajor,
+          pricing_snapshot: pricingSnapshot,
           customer: {
             name: customer.name,
             email: customer.email,
@@ -180,7 +203,9 @@ export function CheckoutClient() {
         <div className='rounded-3xl border border-dashed border-stone-300 bg-white p-8 shadow-sm'>
           <h1 className='text-2xl font-semibold text-stone-900'>Your cart is empty</h1>
           <p className='mt-3 text-sm text-stone-600'>Add products to your cart before checkout.</p>
-          <Link href='/shop' className='mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white'>Continue shopping</Link>
+          <Link href='/shop' className='mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white'>
+            Continue shopping
+          </Link>
         </div>
       </section>
     );
@@ -192,7 +217,7 @@ export function CheckoutClient() {
         <div>
           <p className='text-sm uppercase tracking-[0.2em] text-rose-500'>Checkout</p>
           <h1 className='mt-2 text-3xl font-semibold text-stone-900'>Review your cart</h1>
-          <p className='mt-2 text-sm text-stone-600'>Your total includes products and the Paystack service charge only.</p>
+          <p className='mt-2 text-sm text-stone-600'>Sedifex confirms the final total securely before payment.</p>
         </div>
 
         <div className='space-y-3'>
@@ -233,23 +258,28 @@ export function CheckoutClient() {
         <div className='grid gap-4'>
           <input value={customer.name} onChange={(event) => updateCustomer('name', event.target.value)} placeholder='Full name *' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <input value={customer.phone} onChange={(event) => updateCustomer('phone', event.target.value)} placeholder='Phone number *' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
-          <input value={customer.email} onChange={(event) => updateCustomer('email', event.target.value)} placeholder='Email address' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
+          <input value={customer.email} onChange={(event) => updateCustomer('email', event.target.value)} placeholder='Email address *' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <input value={customer.deliveryLocation} onChange={(event) => updateCustomer('deliveryLocation', event.target.value)} placeholder='Delivery location / landmark' className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
           <textarea value={customer.note} onChange={(event) => updateCustomer('note', event.target.value)} placeholder='Order note' rows={3} className='rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-rose-400' />
         </div>
 
-        <div className='rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>Delivery fee is not charged now. After payment, the store will contact you and confirm delivery based on your location.</div>
-
         <div className='space-y-3 rounded-2xl bg-stone-50 p-4 text-sm'>
-          <div className='flex justify-between'><span>Products subtotal</span><span className='font-semibold'>{formatMinorGHS(productSubtotalMinor)}</span></div>
-          <div className='flex justify-between'><span>Paystack service charge</span><span>{isPreviewing ? 'Confirming...' : formatMinorGHS(serviceChargeMinor)}</span></div>
-          <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Total to pay</span><span>{formatMinorGHS(totalToPayMinor)}</span></div>
+          <div className='flex justify-between'><span>Product subtotal</span><span className='font-semibold'>{formatMinorGHS(productSubtotalMinor)}</span></div>
+          <div className='flex justify-between'><span>Service charge</span><span>{formatMinorGHS(serviceChargeMinor)}</span></div>
+          <div className='flex justify-between'><span>Delivery</span><span>Confirmed after payment</span></div>
+          <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Total to pay now</span><span>{formatMinorGHS(totalToPayMinor)}</span></div>
+          {isPreviewing ? <p className='text-xs text-stone-500'>Confirming total...</p> : null}
+          {previewNotice ? <p className='text-xs text-stone-500'>{previewNotice}</p> : null}
         </div>
 
-        {previewNotice ? <p className='rounded-xl bg-stone-50 p-3 text-xs text-stone-600'>{previewNotice}</p> : null}
         {error ? <p className='rounded-xl bg-rose-50 p-3 text-sm text-rose-700'>{error}</p> : null}
 
-        <button type='button' onClick={handleCheckout} disabled={isCheckingOut || isPreviewing} className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'>
+        <button
+          type='button'
+          onClick={handleCheckout}
+          disabled={isCheckingOut || totalToPayMinor <= 0}
+          className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'
+        >
           {isCheckingOut ? 'Starting payment...' : 'Checkout with Paystack'}
         </button>
       </aside>
