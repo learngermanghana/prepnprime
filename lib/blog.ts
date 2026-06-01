@@ -10,6 +10,10 @@ export type SedifexBlogPost = {
   updatedAt?: string | null;
   authorName?: string | null;
   tags?: string[];
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  canonicalUrl?: string | null;
+  ogImage?: string | null;
 };
 
 export type SedifexBlogResponse = {
@@ -48,42 +52,114 @@ function getBlogUrl(slug?: string) {
   return url;
 }
 
+function textValue(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return '';
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatInlineMarkdown(value: string) {
+  return escapeHtml(value)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function plainTextOrMarkdownToHtml(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+
+  const lines = trimmed.replace(/\r\n/g, '\n').split('\n');
+  const html: string[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    html.push(`<ul>${listItems.map((item) => `<li>${item}</li>`).join('')}</ul>`);
+    listItems = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+
+    if (line.startsWith('### ')) {
+      flushList();
+      html.push(`<h3>${formatInlineMarkdown(line.slice(4))}</h3>`);
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      flushList();
+      html.push(`<h2>${formatInlineMarkdown(line.slice(3))}</h2>`);
+      continue;
+    }
+
+    if (line.startsWith('# ')) {
+      flushList();
+      html.push(`<h2>${formatInlineMarkdown(line.slice(2))}</h2>`);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      listItems.push(formatInlineMarkdown(line.replace(/^[-*]\s+/, '')));
+      continue;
+    }
+
+    flushList();
+    html.push(`<p>${formatInlineMarkdown(line)}</p>`);
+  }
+
+  flushList();
+  return html.join('');
+}
+
 function normalizePost(raw: unknown): SedifexBlogPost | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = raw as Record<string, unknown>;
-  const title = typeof record.title === 'string' ? record.title : '';
-  const slug = typeof record.slug === 'string'
-    ? record.slug
-    : typeof record.postSlug === 'string'
-      ? record.postSlug
-      : '';
+  const title = textValue(record, ['title']);
+  const slug = textValue(record, ['slug', 'postSlug']);
 
   if (!title || !slug) return null;
 
+  const htmlContent = textValue(record, ['contentHtml', 'html', 'htmlContent', 'bodyHtml']);
+  const textContent = textValue(record, ['content', 'postContent', 'body', 'bodyText', 'contentText', 'description']);
+  const contentHtml = htmlContent || plainTextOrMarkdownToHtml(textContent);
+  const metaDescription = textValue(record, ['metaDescription', 'meta_description']);
+  const excerpt = textValue(record, ['excerpt', 'summary']) || metaDescription || stripHtml(contentHtml).slice(0, 160) || null;
+  const image = textValue(record, ['coverImageUrl', 'imageUrl', 'featuredImageUrl', 'ogImage']);
+
   return {
-    id: typeof record.id === 'string' ? record.id : undefined,
+    id: textValue(record, ['id']) || undefined,
     title,
     slug,
-    excerpt: typeof record.excerpt === 'string' ? record.excerpt : null,
-    coverImageUrl: typeof record.coverImageUrl === 'string'
-      ? record.coverImageUrl
-      : typeof record.imageUrl === 'string'
-        ? record.imageUrl
-        : null,
-    coverImageAlt: typeof record.coverImageAlt === 'string'
-      ? record.coverImageAlt
-      : typeof record.imageAlt === 'string'
-        ? record.imageAlt
-        : title,
-    contentHtml: typeof record.contentHtml === 'string'
-      ? record.contentHtml
-      : typeof record.html === 'string'
-        ? record.html
-        : null,
-    publishedAt: typeof record.publishedAt === 'string' ? record.publishedAt : null,
-    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
-    authorName: typeof record.authorName === 'string' ? record.authorName : null,
-    tags: Array.isArray(record.tags) ? record.tags.filter((tag): tag is string => typeof tag === 'string') : []
+    excerpt,
+    coverImageUrl: image || null,
+    coverImageAlt: textValue(record, ['coverImageAlt', 'imageAlt', 'alt']) || title,
+    contentHtml,
+    publishedAt: textValue(record, ['publishedAt', 'createdAt']) || null,
+    updatedAt: textValue(record, ['updatedAt']) || null,
+    authorName: textValue(record, ['authorName', 'author']) || null,
+    tags: Array.isArray(record.tags) ? record.tags.filter((tag): tag is string => typeof tag === 'string') : [],
+    metaTitle: textValue(record, ['metaTitle', 'meta_title']) || null,
+    metaDescription: metaDescription || null,
+    canonicalUrl: textValue(record, ['canonicalUrl', 'canonical_url']) || null,
+    ogImage: textValue(record, ['ogImage', 'og_image']) || image || null
   };
 }
 
