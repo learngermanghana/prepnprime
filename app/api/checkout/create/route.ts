@@ -108,14 +108,21 @@ export async function POST(request: Request) {
         source_label: 'Prep N Prime GH Website',
         orderType: 'product',
         currency: payload.currency ?? 'GHS',
-        fulfillment_type: payload.fulfillment_type ?? 'PICKUP',
-        delivery_address_id: payload.delivery_address_id ?? null,
+        fulfillment_type: 'PICKUP',
+        delivery_address_id: null,
+        delivery_fee: 0,
+        tax_total: 0,
+        charge_processing_fee_to_customer: true,
+        add_processing_fee_to_customer: true,
+        processing_fee_payer: 'customer',
         cart,
         items,
         customer: payload.customer,
         delivery: {
           location: payload.delivery_location ?? payload.customer?.deliveryLocation ?? '',
-          notes: payload.note ?? payload.customer?.note ?? ''
+          notes: payload.note ?? payload.customer?.note ?? '',
+          feeMode: 'after_payment',
+          message: 'Delivery fee will be confirmed after payment based on customer location.'
         },
         delivery_location: payload.delivery_location,
         note: payload.note,
@@ -125,7 +132,11 @@ export async function POST(request: Request) {
         failed_url: `${SITE_URL}/checkout/failed`,
         syncStatus: 'pending',
         syncRequestedAt: new Date().toISOString(),
-        attributes: { source: 'website_checkout' }
+        attributes: {
+          source: 'website_checkout',
+          deliveryFeeMode: 'after_payment',
+          processingFeePayer: 'customer'
+        }
       })
     });
 
