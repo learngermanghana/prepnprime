@@ -10,7 +10,7 @@ export default async function ShopPage() {
 
   return (
     <section className='mx-auto max-w-7xl space-y-10 px-4 py-14 md:px-6'>
-      <SectionHeading title='Shop All Products' description='Browse the full Prep N Prime GH catalog and order via WhatsApp.' />
+      <SectionHeading title='Shop All Products' description='Browse the full Prep N Prime GH catalog, add items to cart, and checkout securely.' />
       <ShopCatalog products={products} />
     </section>
   );
