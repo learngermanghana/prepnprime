@@ -41,13 +41,9 @@ export default async function HomePage() {
       </section>
 
       <section className='mx-auto max-w-7xl px-4 md:px-6'>
-        <SectionHeading eyebrow='Categories' title='Shop by beauty category' description='Explore top categories curated for body care and skincare needs.' />
+        <SectionHeading eyebrow='Brand' title='Shop by brand' description='Explore Body Care, Skin Care, and curated Collections together in one place.' />
         <div className='mt-6 grid gap-4 md:grid-cols-3'>
-          <CategoryCard title='Body Care' description='Lotions, oils, scrubs and moisturizing essentials.' href='/body-care' />
-          <CategoryCard title='Skin Care' description='Cleansers, toners, serums, moisturizers and sunscreen.' href='/skin-care' />
-          <CategoryCard title='Sensitive Skin' description='Comfort-first picks for delicate and reactive skin.' href='/sensitive-skin' />
-          <CategoryCard title='Glow Essentials' description='Brightening and hydration favorites for radiant skin.' href='/glow-products' />
-          <CategoryCard title='Daily Care' description='Reliable everyday routines for healthy looking skin.' href='/collections' />
+          <CategoryCard title='Brand' description='Body Care, Skin Care, and curated Collections from Prep N Prime GH.' href='/brand' />
         </div>
       </section>
 
