@@ -17,6 +17,7 @@ export type SedifexBlogResponse = {
   posts?: SedifexBlogPost[];
   post?: SedifexBlogPost;
   item?: SedifexBlogPost;
+  data?: SedifexBlogPost | SedifexBlogPost[];
   nextCursor?: string | null;
 };
 
@@ -91,14 +92,27 @@ function getPostsFromPayload(payload: unknown): SedifexBlogPost[] {
   if (!payload || typeof payload !== 'object') return [];
 
   const record = payload as SedifexBlogResponse;
-  const source = Array.isArray(record.items) ? record.items : Array.isArray(record.posts) ? record.posts : [];
+  const source = Array.isArray(record.items)
+    ? record.items
+    : Array.isArray(record.posts)
+      ? record.posts
+      : Array.isArray(record.data)
+        ? record.data
+        : [];
+
   return source.map(normalizePost).filter((post): post is SedifexBlogPost => Boolean(post));
 }
 
-function getPostFromPayload(payload: unknown): SedifexBlogPost | null {
+function getPostFromPayload(payload: unknown, slug?: string): SedifexBlogPost | null {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as SedifexBlogResponse;
-  return normalizePost(record.post ?? record.item ?? payload);
+
+  const direct = normalizePost(record.post ?? record.item ?? (!Array.isArray(record.data) ? record.data : null) ?? payload);
+  if (direct && (!slug || direct.slug === slug)) return direct;
+
+  const posts = getPostsFromPayload(payload);
+  if (!slug) return posts[0] ?? null;
+  return posts.find((post) => post.slug === slug) ?? null;
 }
 
 export async function getSedifexBlogPosts() {
@@ -120,11 +134,17 @@ export async function getSedifexBlogPost(slug: string) {
 
   try {
     const response = await fetch(getBlogUrl(slug), { next: { revalidate: 120 } });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    return getPostFromPayload(payload);
+    if (response.ok) {
+      const payload = await response.json();
+      const post = getPostFromPayload(payload, slug);
+      if (post) return post;
+    }
+
+    const posts = await getSedifexBlogPosts();
+    return posts.find((post) => post.slug === slug) ?? null;
   } catch {
-    return null;
+    const posts = await getSedifexBlogPosts();
+    return posts.find((post) => post.slug === slug) ?? null;
   }
 }
 
