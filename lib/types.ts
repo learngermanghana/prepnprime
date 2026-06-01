@@ -1,6 +1,7 @@
 export type SedifexProduct = {
   id?: string;
   storeId?: string;
+  storeName?: string;
   name: string;
   category?: string | null;
   description?: string | null;
@@ -82,6 +83,15 @@ export type CheckoutCreateResponse = CheckoutPreviewResponse & {
   payment_status?: string;
   order_status?: string;
   checkout_url?: string;
+  checkoutUrl?: string;
   payment_url?: string;
+  paymentUrl?: string;
   redirect_url?: string;
+  authorizationUrl?: string;
+  authorization_url?: string;
+  reference?: string;
+  clientOrderId?: string;
+  client_order_id?: string;
+  amountPaid?: number;
+  amount_paid?: number;
 };
