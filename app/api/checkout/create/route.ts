@@ -35,15 +35,34 @@ function isValidPhone(value?: string) {
   return digits.length >= 9 && digits.length <= 15;
 }
 
+function numberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeSedifexItemId(rawId: string, storeId: string) {
   const id = rawId.trim();
   const storePrefix = `${storeId}_`;
   return storeId && id.startsWith(storePrefix) ? id.slice(storePrefix.length) : id;
 }
 
+function getAmountMajor(payload: CheckoutPayload) {
+  const directAmount = numberValue(payload.amount ?? payload.totalAmount ?? payload.total_amount);
+  if (directAmount && directAmount > 0) return directAmount;
+
+  const snapshot = payload.pricing_snapshot && typeof payload.pricing_snapshot === 'object'
+    ? payload.pricing_snapshot as Record<string, unknown>
+    : {};
+  const finalTotalMinor = numberValue(snapshot.final_total);
+  if (finalTotalMinor && finalTotalMinor > 0) return finalTotalMinor / 100;
+
+  return null;
+}
+
 function buildCheckoutBody(payload: CheckoutPayload) {
   const storeId = SEDIFEX_STORE_ID as string;
   const clientOrderId = `PREP-PAY-${Date.now()}`;
+  const amountMajor = getAmountMajor(payload);
   const cart = payload.items.map((item) => {
     const productId = normalizeSedifexItemId(item.item_id, storeId);
     return {
@@ -82,12 +101,20 @@ function buildCheckoutBody(payload: CheckoutPayload) {
     merchant_id: storeId,
     clientOrderId,
     client_order_id: clientOrderId,
+    payment_reference: clientOrderId,
+    reference: clientOrderId,
     sourceChannel: 'client_website',
     source_channel: 'client_website',
     sourceLabel: 'Prep N Prime GH Website',
     source_label: 'Prep N Prime GH Website',
     orderType: 'product',
     currency: payload.currency ?? 'GHS',
+    amount: amountMajor,
+    totalAmount: amountMajor,
+    total_amount: amountMajor,
+    servicePrice: amountMajor,
+    service_price: amountMajor,
+    pricing_snapshot: payload.pricing_snapshot,
     fulfillment_type: 'PICKUP',
     delivery_address_id: null,
     delivery_fee: 0,
@@ -98,6 +125,15 @@ function buildCheckoutBody(payload: CheckoutPayload) {
     cart,
     items,
     customer: payload.customer,
+    customerEmail: payload.customer?.email,
+    customer_email: payload.customer?.email,
+    customerName: payload.customer?.name,
+    customer_name: payload.customer?.name,
+    customerPhone: payload.customer?.phone,
+    customer_phone: payload.customer?.phone,
+    email: payload.customer?.email,
+    name: payload.customer?.name,
+    phone: payload.customer?.phone,
     delivery: {
       location: payload.delivery_location ?? payload.customer?.deliveryLocation ?? '',
       notes: payload.note ?? payload.customer?.note ?? '',
@@ -124,7 +160,9 @@ function validatePayload(payload: CheckoutPayload) {
   if (!SEDIFEX_STORE_ID || !SEDIFEX_API_KEY) return 'Sedifex checkout is not configured yet.';
   if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) return 'Cart is empty.';
   if (!payload.customer?.name || !payload.customer?.phone) return 'Customer name and phone number are required.';
+  if (!payload.customer?.email) return 'Customer email is required.';
   if (!isValidPhone(payload.customer.phone)) return 'Please enter a valid phone number.';
+  if (!getAmountMajor(payload)) return 'Checkout amount is required.';
   const invalidItem = payload.items.find((item) => !item.item_id || !Number.isInteger(item.qty) || item.qty < 1);
   if (invalidItem) return 'Cart contains an invalid item.';
   return null;
