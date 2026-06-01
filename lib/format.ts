@@ -6,3 +6,8 @@ export const formatGHS = (value?: number) => {
     maximumFractionDigits: 2
   }).format(value);
 };
+
+export const formatMinorGHS = (value?: number) => {
+  if (typeof value !== 'number') return 'Pending';
+  return formatGHS(value / 100);
+};
