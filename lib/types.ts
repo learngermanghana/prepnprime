@@ -13,6 +13,13 @@ export type SedifexProduct = {
   imageUrls?: string[];
   imageAlt?: string;
   updatedAt?: string;
+  status?: string | null;
+  publishStatus?: string | null;
+  publicationStatus?: string | null;
+  state?: string | null;
+  isDraft?: boolean;
+  isPublished?: boolean;
+  published?: boolean;
 };
 
 export type SedifexPromo = {

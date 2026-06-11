@@ -114,12 +114,93 @@ function normalizeGalleryItems(raw: unknown): SedifexGalleryItem[] {
   }, []);
 }
 
+function normalizeProductKey(value: unknown) {
+  return String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function getProductStatus(product: SedifexProduct) {
+  const record = product as SedifexProduct & Record<string, unknown>;
+
+  const status =
+    typeof record.status === 'string'
+      ? record.status
+      : typeof record.publishStatus === 'string'
+        ? record.publishStatus
+        : typeof record.publicationStatus === 'string'
+          ? record.publicationStatus
+          : typeof record.state === 'string'
+            ? record.state
+            : '';
+
+  return status.toLowerCase().trim();
+}
+
+function isDraftOrUnpublishedProduct(product: SedifexProduct) {
+  const record = product as SedifexProduct & Record<string, unknown>;
+  const status = getProductStatus(product);
+
+  return (
+    status === 'draft' ||
+    status === 'unpublished' ||
+    status === 'hidden' ||
+    status === 'archived' ||
+    record.isDraft === true ||
+    record.isPublished === false ||
+    record.published === false
+  );
+}
+
+function isPublishedProduct(product: SedifexProduct) {
+  const record = product as SedifexProduct & Record<string, unknown>;
+  const status = getProductStatus(product);
+
+  return (
+    status === 'published' ||
+    status === 'active' ||
+    record.isPublished === true ||
+    record.published === true
+  );
+}
+
 function deduplicateProducts(products: SedifexProduct[]) {
   const map = new Map<string, SedifexProduct>();
+
   for (const product of products) {
-    const key = `${product.id ?? ''}|${product.storeId ?? ''}|${product.name}|${product.price ?? ''}`;
-    if (!map.has(key)) map.set(key, product);
+    if (isDraftOrUnpublishedProduct(product)) continue;
+
+    const key = [
+      normalizeProductKey(product.storeId),
+      normalizeProductKey(product.category),
+      normalizeProductKey(product.name),
+      product.price ?? ''
+    ].join('|');
+
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, product);
+      continue;
+    }
+
+    const productIsPublished = isPublishedProduct(product);
+    const existingIsPublished = isPublishedProduct(existing);
+
+    if (productIsPublished && !existingIsPublished) {
+      map.set(key, product);
+      continue;
+    }
+
+    const productTime = product.updatedAt ? Date.parse(product.updatedAt) : 0;
+    const existingTime = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
+
+    if (productTime > existingTime) {
+      map.set(key, product);
+    }
   }
+
   return Array.from(map.values());
 }
 
