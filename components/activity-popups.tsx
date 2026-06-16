@@ -26,18 +26,33 @@ const buildActivity = (): ActivityItem => ({
   timeText: pickRandom(ACTIVITY_TIME_TEXT)
 });
 
+const FIRST_POPUP_DELAY_MS = 2500;
+const POPUP_VISIBLE_MS = 4500;
+const POPUP_INTERVAL_MS = 18000;
+
 export function ActivityPopups() {
   const [activity, setActivity] = useState<ActivityItem | null>(null);
 
   useEffect(() => {
-    const showNext = () => setActivity(buildActivity());
+    let showTimer: ReturnType<typeof setTimeout> | undefined;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const initialTimer = setTimeout(showNext, 2500);
-    const intervalId = setInterval(showNext, 14000);
+    const scheduleNext = (delay: number) => {
+      showTimer = setTimeout(() => {
+        setActivity(buildActivity());
+
+        hideTimer = setTimeout(() => {
+          setActivity(null);
+          scheduleNext(POPUP_INTERVAL_MS);
+        }, POPUP_VISIBLE_MS);
+      }, delay);
+    };
+
+    scheduleNext(FIRST_POPUP_DELAY_MS);
 
     return () => {
-      clearTimeout(initialTimer);
-      clearInterval(intervalId);
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
     };
   }, []);
 
