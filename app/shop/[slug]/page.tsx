@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ProductPurchasePanel } from '@/components/product-purchase-panel';
 import { formatGHS } from '@/lib/format';
-import { findProductBySlug, getStableProductSlug } from '@/lib/product-slug';
+import { findProductBySlug } from '@/lib/product-slug';
 import { getSedifexProducts } from '@/lib/sedifex';
 
 const fallbackImage =
@@ -17,9 +17,11 @@ function resolveImage(url?: string | null) {
   return encodeURI(url);
 }
 
+// Do not pre-render every product on each deployment. Product detail pages are
+// generated and cached when first visited, then use the shared 15-minute data
+// revalidation window from lib/sedifex.ts.
 export async function generateStaticParams() {
-  const products = await getSedifexProducts();
-  return products.map((product) => ({ slug: getStableProductSlug(product) }));
+  return [];
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
