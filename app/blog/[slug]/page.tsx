@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { formatBlogDate, getSedifexBlogPost, getSedifexBlogPosts, sanitizeBlogHtml, stripHtml } from '@/lib/blog';
+import { formatBlogDate, getSedifexBlogPost, sanitizeBlogHtml, stripHtml } from '@/lib/blog';
 
 const siteUrl = 'https://www.prepnprimegh.com';
 const fallbackImage = 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=1200&q=80';
@@ -14,9 +14,11 @@ function normalizeImageUrl(url?: string | null) {
   return encodeURI(url);
 }
 
+// Avoid generating every blog article during each deployment. Articles are
+// generated and cached the first time they are requested and then revalidated
+// using the one-hour blog cache window.
 export async function generateStaticParams() {
-  const posts = await getSedifexBlogPosts();
-  return posts.map((post) => ({ slug: post.slug }));
+  return [];
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
