@@ -24,6 +24,11 @@ const integrationKey =
   process.env.SEDIFEX_INTEGRATION_KEY;
 const contractVersion = process.env.SEDIFEX_CONTRACT_VERSION ?? '2026-04-13';
 
+// Product, promotion and gallery data do not need to be regenerated every
+// minute. A 15-minute cache cuts origin requests/ISR churn while keeping the
+// storefront reasonably fresh after Sedifex updates.
+const SEDIFEX_CACHE_SECONDS = 15 * 60;
+
 function buildHeaders() {
   if (!integrationKey) return undefined;
 
@@ -41,7 +46,7 @@ async function sedifexFetch<T>(endpoint: string): Promise<T | null> {
 
   const response = await fetch(`${baseUrl}${endpoint}?storeId=${encodeURIComponent(storeId)}`, {
     headers,
-    next: { revalidate: 60 }
+    next: { revalidate: SEDIFEX_CACHE_SECONDS }
   });
 
   if (!response.ok) throw new Error(`Sedifex request failed: ${response.status}`);
