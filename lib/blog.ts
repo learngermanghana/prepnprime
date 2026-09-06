@@ -121,7 +121,7 @@ function plainTextOrMarkdownToHtml(value: string) {
     }
 
     if (/^[-*]\s+/.test(line)) {
-      listItems.push(formatInlineMarkdown(line.replace(/^[-*]\s+/, ''));
+      listItems.push(formatInlineMarkdown(line.replace(/^[-*]\s+/, '')));
       continue;
     }
 
