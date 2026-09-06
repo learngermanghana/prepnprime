@@ -32,6 +32,10 @@ const SEDIFEX_STORE_ID =
   process.env.NEXT_PUBLIC_SEDIFEX_STORE_ID ??
   process.env.SEDIFEX_BOOKING_TARGET_STORE_ID;
 
+// Blog content changes infrequently, so hourly revalidation avoids unnecessary
+// origin traffic and ISR/cache churn without requiring a redeploy for updates.
+const BLOG_CACHE_SECONDS = 60 * 60;
+
 export const fallbackBlogPosts: SedifexBlogPost[] = [
   {
     title: 'How to Choose the Right Skincare Products in Accra',
@@ -195,7 +199,7 @@ export async function getSedifexBlogPosts() {
   if (!SEDIFEX_STORE_ID) return fallbackBlogPosts;
 
   try {
-    const response = await fetch(getBlogUrl(), { next: { revalidate: 120 } });
+    const response = await fetch(getBlogUrl(), { next: { revalidate: BLOG_CACHE_SECONDS } });
     if (!response.ok) return fallbackBlogPosts;
     const payload = await response.json();
     const posts = getPostsFromPayload(payload);
@@ -209,7 +213,7 @@ export async function getSedifexBlogPost(slug: string) {
   if (!SEDIFEX_STORE_ID) return fallbackBlogPosts.find((post) => post.slug === slug) ?? null;
 
   try {
-    const response = await fetch(getBlogUrl(slug), { next: { revalidate: 120 } });
+    const response = await fetch(getBlogUrl(slug), { next: { revalidate: BLOG_CACHE_SECONDS } });
     if (response.ok) {
       const payload = await response.json();
       const post = getPostFromPayload(payload, slug);

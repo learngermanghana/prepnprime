@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ActivityPopups } from '@/components/activity-popups';
@@ -30,7 +29,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <ActivityPopups />
         </CartProvider>
         <Analytics />
-        <SpeedInsights />
       </body>
     </html>
   );
