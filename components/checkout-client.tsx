@@ -46,8 +46,11 @@ export function CheckoutClient() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState('');
   const [previewNotice, setPreviewNotice] = useState('');
+  const [previewRetryVersion, setPreviewRetryVersion] = useState(0);
 
   const checkoutItems = useMemo(() => toCheckoutItems(items), [items]);
+  const checkoutItemsKey = useMemo(() => JSON.stringify(checkoutItems), [checkoutItems]);
+  const [previewItemsKey, setPreviewItemsKey] = useState<string | null>(null);
   const localSubtotalMinor = Math.round(estimatedTotal * 100);
   const productSubtotalMinor = preview?.subtotal ?? localSubtotalMinor;
   const serviceChargeMinor = preview?.processing_fee_to_add ?? estimateServiceChargeMinor(productSubtotalMinor);
@@ -74,9 +77,13 @@ export function CheckoutClient() {
     }
 
     const controller = new AbortController();
+    // Invalidate the previous cart's pricing immediately. The debounce window
+    // must never leave checkout enabled with a stale amount/snapshot.
+    setPreview(null);
+    setPreviewItemsKey(null);
+    setIsPreviewing(true);
 
     async function loadPreview() {
-      setIsPreviewing(true);
       setPreviewNotice('');
       try {
         const response = await fetch('/api/checkout/preview', {
@@ -94,10 +101,11 @@ export function CheckoutClient() {
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Unable to confirm checkout total.');
         setPreview(data);
+        setPreviewItemsKey(checkoutItemsKey);
       } catch {
         if (controller.signal.aborted) return;
         setPreview(null);
-        setPreviewNotice('Service charge is estimated here. Sedifex will confirm the final payment total at checkout.');
+        setPreviewNotice('We could not confirm the latest total. Please retry before checkout.');
       } finally {
         if (!controller.signal.aborted) setIsPreviewing(false);
       }
@@ -110,7 +118,7 @@ export function CheckoutClient() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [checkoutItems, items.length]);
+  }, [checkoutItems, checkoutItemsKey, items.length, previewRetryVersion]);
 
   const updateCustomer = (field: keyof CustomerForm, value: string) => {
     setCustomer((current) => ({ ...current, [field]: value }));
@@ -118,6 +126,10 @@ export function CheckoutClient() {
 
   const handleCheckout = async () => {
     if (!items.length) return;
+    if (isPreviewing || !preview || previewItemsKey !== checkoutItemsKey) {
+      setError('Please wait while we confirm the latest cart total.');
+      return;
+    }
     if (!customer.name.trim() || !customer.phone.trim()) {
       setError('Please enter your full name and phone number.');
       return;
@@ -275,7 +287,20 @@ export function CheckoutClient() {
           <div className='flex justify-between'><span>Delivery</span><span>Confirmed after payment</span></div>
           <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Total to pay now</span><span>{formatMinorGHS(totalToPayMinor)}</span></div>
           {isPreviewing ? <p className='text-xs text-stone-500'>Confirming total...</p> : null}
-          {previewNotice ? <p className='text-xs text-stone-500'>{previewNotice}</p> : null}
+          {previewNotice ? (
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <p className='text-xs text-stone-500'>{previewNotice}</p>
+              {!isPreviewing && !preview ? (
+                <button
+                  type='button'
+                  onClick={() => setPreviewRetryVersion((version) => version + 1)}
+                  className='text-xs font-semibold text-rose-600 underline underline-offset-2'
+                >
+                  Retry total
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {error ? <p className='rounded-xl bg-rose-50 p-3 text-sm text-rose-700'>{error}</p> : null}
@@ -283,7 +308,7 @@ export function CheckoutClient() {
         <button
           type='button'
           onClick={handleCheckout}
-          disabled={isCheckingOut || totalToPayMinor <= 0}
+          disabled={isCheckingOut || isPreviewing || !preview || previewItemsKey !== checkoutItemsKey || totalToPayMinor <= 0}
           className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'
         >
           {isCheckingOut ? 'Starting payment...' : 'Checkout with Paystack'}
