@@ -32,9 +32,9 @@ const SEDIFEX_STORE_ID =
   process.env.NEXT_PUBLIC_SEDIFEX_STORE_ID ??
   process.env.SEDIFEX_BOOKING_TARGET_STORE_ID;
 
-// Blog content changes infrequently, so hourly revalidation avoids unnecessary
+// Blog content changes infrequently, so a 12-hour window avoids unnecessary
 // origin traffic and ISR/cache churn without requiring a redeploy for updates.
-const BLOG_CACHE_SECONDS = 60 * 60;
+const BLOG_CACHE_SECONDS = 12 * 60 * 60;
 
 export const fallbackBlogPosts: SedifexBlogPost[] = [
   {

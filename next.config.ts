@@ -2,6 +2,10 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   images: {
+    // Product and gallery media is already hosted remotely. Serving it directly
+    // avoids consuming Vercel Image Optimization transformations on the Hobby
+    // plan. Set this build-time flag to "true" if Vercel optimization is wanted.
+    unoptimized: process.env.VERCEL_IMAGE_OPTIMIZATION !== 'true',
     // Keep optimized variants in Vercel's image cache for at least a day so
     // repeat visits do not keep regenerating the same product/gallery images.
     minimumCacheTTL: 60 * 60 * 24,
