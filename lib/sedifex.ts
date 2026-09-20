@@ -91,6 +91,13 @@ function normalizePromoRecord(raw: unknown): SedifexPromo | null {
   };
 }
 
+function normalizeRemoteMediaUrl(url: string) {
+  const trimmed = url.trim();
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('http://')) return `https://${trimmed.slice('http://'.length)}`;
+  return trimmed;
+}
+
 function normalizeGalleryItems(raw: unknown): SedifexGalleryItem[] {
   if (!Array.isArray(raw)) return [];
 
@@ -107,7 +114,7 @@ function normalizeGalleryItems(raw: unknown): SedifexGalleryItem[] {
 
     items.push({
       id: typeof record.id === 'string' ? record.id : undefined,
-      url,
+      url: normalizeRemoteMediaUrl(url),
       alt: typeof record.alt === 'string' ? record.alt : undefined,
       caption: typeof record.caption === 'string' ? record.caption : undefined,
       sortOrder: typeof record.sortOrder === 'number' ? record.sortOrder : undefined,
