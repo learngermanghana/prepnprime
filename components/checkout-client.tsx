@@ -46,6 +46,7 @@ export function CheckoutClient() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState('');
   const [previewNotice, setPreviewNotice] = useState('');
+  const [previewRetryVersion, setPreviewRetryVersion] = useState(0);
 
   const checkoutItems = useMemo(() => toCheckoutItems(items), [items]);
   const checkoutItemsKey = useMemo(() => JSON.stringify(checkoutItems), [checkoutItems]);
@@ -104,7 +105,7 @@ export function CheckoutClient() {
       } catch {
         if (controller.signal.aborted) return;
         setPreview(null);
-        setPreviewNotice('Service charge is estimated here. Sedifex will confirm the final payment total at checkout.');
+        setPreviewNotice('We could not confirm the latest total. Please retry before checkout.');
       } finally {
         if (!controller.signal.aborted) setIsPreviewing(false);
       }
@@ -117,7 +118,7 @@ export function CheckoutClient() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [checkoutItems, checkoutItemsKey, items.length]);
+  }, [checkoutItems, checkoutItemsKey, items.length, previewRetryVersion]);
 
   const updateCustomer = (field: keyof CustomerForm, value: string) => {
     setCustomer((current) => ({ ...current, [field]: value }));
@@ -286,7 +287,20 @@ export function CheckoutClient() {
           <div className='flex justify-between'><span>Delivery</span><span>Confirmed after payment</span></div>
           <div className='border-t border-stone-200 pt-3 flex justify-between text-base font-semibold text-stone-900'><span>Total to pay now</span><span>{formatMinorGHS(totalToPayMinor)}</span></div>
           {isPreviewing ? <p className='text-xs text-stone-500'>Confirming total...</p> : null}
-          {previewNotice ? <p className='text-xs text-stone-500'>{previewNotice}</p> : null}
+          {previewNotice ? (
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <p className='text-xs text-stone-500'>{previewNotice}</p>
+              {!isPreviewing && !preview ? (
+                <button
+                  type='button'
+                  onClick={() => setPreviewRetryVersion((version) => version + 1)}
+                  className='text-xs font-semibold text-rose-600 underline underline-offset-2'
+                >
+                  Retry total
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {error ? <p className='rounded-xl bg-rose-50 p-3 text-sm text-rose-700'>{error}</p> : null}
