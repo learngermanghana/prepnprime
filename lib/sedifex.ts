@@ -24,10 +24,11 @@ const integrationKey =
   process.env.SEDIFEX_INTEGRATION_KEY;
 const contractVersion = process.env.SEDIFEX_CONTRACT_VERSION ?? '2026-04-13';
 
-// Product, promotion and gallery data do not need to be regenerated every
-// minute. A 15-minute cache cuts origin requests/ISR churn while keeping the
-// storefront reasonably fresh after Sedifex updates.
-const SEDIFEX_CACHE_SECONDS = 15 * 60;
+// Cache each content type according to how frequently it changes. These longer
+// windows reduce Vercel function/ISR work and calls to Sedifex on the Hobby plan.
+const PRODUCT_CACHE_SECONDS = 60 * 60;
+const PROMO_CACHE_SECONDS = 60 * 60;
+const GALLERY_CACHE_SECONDS = 12 * 60 * 60;
 
 function buildHeaders() {
   if (!integrationKey) return undefined;
@@ -40,13 +41,13 @@ function buildHeaders() {
   };
 }
 
-async function sedifexFetch<T>(endpoint: string): Promise<T | null> {
+async function sedifexFetch<T>(endpoint: string, revalidate: number): Promise<T | null> {
   const headers = buildHeaders();
   if (!baseUrl || !storeId || !headers) return null;
 
   const response = await fetch(`${baseUrl}${endpoint}?storeId=${encodeURIComponent(storeId)}`, {
     headers,
-    next: { revalidate: SEDIFEX_CACHE_SECONDS }
+    next: { revalidate }
   });
 
   if (!response.ok) throw new Error(`Sedifex request failed: ${response.status}`);
@@ -54,10 +55,10 @@ async function sedifexFetch<T>(endpoint: string): Promise<T | null> {
   return (await response.json()) as T;
 }
 
-async function sedifexFetchMany<T>(endpoints: string[]): Promise<T | null> {
+async function sedifexFetchMany<T>(endpoints: string[], revalidate: number): Promise<T | null> {
   for (const endpoint of endpoints) {
     try {
-      const result = await sedifexFetch<T>(endpoint);
+      const result = await sedifexFetch<T>(endpoint, revalidate);
       if (result) return result;
     } catch {
       continue;
@@ -220,7 +221,7 @@ export function groupProductsByCategory(products: SedifexProduct[]) {
 
 export async function getSedifexProducts() {
   try {
-    const result = await sedifexFetch<IntegrationProductsResponse>('/v1IntegrationProducts');
+    const result = await sedifexFetch<IntegrationProductsResponse>('/v1IntegrationProducts', PRODUCT_CACHE_SECONDS);
     const products = Array.isArray(result?.products) ? result.products : [];
     if (!products.length) return fallbackProducts;
     return deduplicateProducts(products);
@@ -231,7 +232,7 @@ export async function getSedifexProducts() {
 
 export async function getSedifexPromo() {
   try {
-    const result = await sedifexFetch<IntegrationPromoResponse>('/v1IntegrationPromo');
+    const result = await sedifexFetch<IntegrationPromoResponse>('/v1IntegrationPromo', PROMO_CACHE_SECONDS);
     const promo = normalizePromoRecord(result?.promo) ?? normalizePromoRecord(result);
     if (!promo) return fallbackPromo;
     return promo;
@@ -242,10 +243,10 @@ export async function getSedifexPromo() {
 
 export async function getSedifexGallery() {
   try {
-    const result = await sedifexFetchMany<IntegrationGalleryResponse | SedifexGalleryItem[]>([
-      '/integrationGallery',
-      '/v1IntegrationGallery'
-    ]);
+    const result = await sedifexFetchMany<IntegrationGalleryResponse | SedifexGalleryItem[]>(
+      ['/integrationGallery', '/v1IntegrationGallery'],
+      GALLERY_CACHE_SECONDS
+    );
     const galleryPayload = Array.isArray(result)
       ? result
       : result && typeof result === 'object' && 'gallery' in result

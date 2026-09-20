@@ -11,6 +11,7 @@ import type { CheckoutCreateResponse, CheckoutPreviewResponse } from '@/lib/type
 const fallbackImage = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80';
 const CHECKOUT_SNAPSHOT_KEY = 'checkout:last_customer';
 const FEE_RATE = 0.0195;
+const PREVIEW_DEBOUNCE_MS = 500;
 
 function normalizeImageUrl(url?: string | null) {
   if (!url?.trim()) return fallbackImage;
@@ -102,8 +103,13 @@ export function CheckoutClient() {
       }
     }
 
-    loadPreview();
-    return () => controller.abort();
+    // Cart quantity buttons can be clicked several times in quick succession.
+    // Debouncing collapses those changes into one serverless preview request.
+    const timeout = window.setTimeout(loadPreview, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [checkoutItems, items.length]);
 
   const updateCustomer = (field: keyof CustomerForm, value: string) => {

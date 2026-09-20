@@ -38,10 +38,11 @@ Required headers:
 
 Features:
 - Contract-versioned integration requests (header, not URL path)
-- `next: { revalidate: 60 }`
+- One-hour product/promotion caching and 12-hour gallery/blog caching
 - Product deduplication by `id|storeId|name|price`
 - Fallback sample data when API is unavailable
 - Gallery publishing and sort handling
+- Direct remote-image delivery by default to conserve Vercel Hobby image transformations
 
 ## Environment Variables
 Copy `.env.example` to `.env.local`:
@@ -52,6 +53,8 @@ SEDIFEX_STORE_ID=
 SEDIFEX_INTEGRATION_API_KEY=
 SEDIFEX_INTEGRATION_KEY=
 SEDIFEX_CONTRACT_VERSION=2026-04-13
+# Optional: opt back into Vercel Image Optimization at build time.
+VERCEL_IMAGE_OPTIMIZATION=false
 ```
 
 ## Local Development
