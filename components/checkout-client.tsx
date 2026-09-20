@@ -48,6 +48,8 @@ export function CheckoutClient() {
   const [previewNotice, setPreviewNotice] = useState('');
 
   const checkoutItems = useMemo(() => toCheckoutItems(items), [items]);
+  const checkoutItemsKey = useMemo(() => JSON.stringify(checkoutItems), [checkoutItems]);
+  const [previewItemsKey, setPreviewItemsKey] = useState<string | null>(null);
   const localSubtotalMinor = Math.round(estimatedTotal * 100);
   const productSubtotalMinor = preview?.subtotal ?? localSubtotalMinor;
   const serviceChargeMinor = preview?.processing_fee_to_add ?? estimateServiceChargeMinor(productSubtotalMinor);
@@ -74,9 +76,13 @@ export function CheckoutClient() {
     }
 
     const controller = new AbortController();
+    // Invalidate the previous cart's pricing immediately. The debounce window
+    // must never leave checkout enabled with a stale amount/snapshot.
+    setPreview(null);
+    setPreviewItemsKey(null);
+    setIsPreviewing(true);
 
     async function loadPreview() {
-      setIsPreviewing(true);
       setPreviewNotice('');
       try {
         const response = await fetch('/api/checkout/preview', {
@@ -94,6 +100,7 @@ export function CheckoutClient() {
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Unable to confirm checkout total.');
         setPreview(data);
+        setPreviewItemsKey(checkoutItemsKey);
       } catch {
         if (controller.signal.aborted) return;
         setPreview(null);
@@ -110,7 +117,7 @@ export function CheckoutClient() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [checkoutItems, items.length]);
+  }, [checkoutItems, checkoutItemsKey, items.length]);
 
   const updateCustomer = (field: keyof CustomerForm, value: string) => {
     setCustomer((current) => ({ ...current, [field]: value }));
@@ -118,6 +125,10 @@ export function CheckoutClient() {
 
   const handleCheckout = async () => {
     if (!items.length) return;
+    if (isPreviewing || !preview || previewItemsKey !== checkoutItemsKey) {
+      setError('Please wait while we confirm the latest cart total.');
+      return;
+    }
     if (!customer.name.trim() || !customer.phone.trim()) {
       setError('Please enter your full name and phone number.');
       return;
@@ -283,7 +294,7 @@ export function CheckoutClient() {
         <button
           type='button'
           onClick={handleCheckout}
-          disabled={isCheckingOut || totalToPayMinor <= 0}
+          disabled={isCheckingOut || isPreviewing || !preview || previewItemsKey !== checkoutItemsKey || totalToPayMinor <= 0}
           className='w-full rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300'
         >
           {isCheckingOut ? 'Starting payment...' : 'Checkout with Paystack'}
